@@ -16,89 +16,141 @@ if len(sys.argv) < 2:
 else:
     filename = sys.argv[1]
 
-f, axes = plt.subplots(2, 2, figsize=(12, 4.5))
+
+CONTRAST_THRESHOLD = 73
+L_THRESHOLD_LC  = (179, 255)
+L_THRESHOLD  = (203, 255)
+B_THRESHOLD_LC  = (139, 255)
+B_THRESHOLD  = (137, 255)
+
+CONTRAST_THRESHOLD = 100
+L_THRESHOLD_LC = (125, 255)
+B_THRESHOLD_LC = (138, 255)
+L_THRESHOLD    = (224, 255)
+B_THRESHOLD    = (172, 255)
+
+
+f, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 f.tight_layout()
 plt.subplots_adjust(left=0.03, right=.97, top=0.99, bottom=0.)
 
+def Contrast_Changed(x):
+    global CONTRAST_THRESHOLD
+    CONTRAST_THRESHOLD = x
+    redrawFiles()
+
+def l_threshLowLCChanged(x):
+    global L_THRESHOLD_LC
+    L_THRESHOLD_LC = (x, L_THRESHOLD_LC[1])
+    redrawFiles()
+
+def l_threshHighLCChanged(x):
+    global L_THRESHOLD_LC
+    L_THRESHOLD_LC = (L_THRESHOLD_LC[0], x)
+    redrawFiles()
+
+def b_threshLowLCChanged(x):
+    global B_THRESHOLD_LC
+    B_THRESHOLD_LC = (x, B_THRESHOLD_LC[1])
+    redrawFiles()
+
+def b_threshHighLCChanged(x):
+    global B_THRESHOLD_LC
+    B_THRESHOLD_LC = (B_THRESHOLD_LC[0], x)
+    redrawFiles()
 
 def l_threshLowChanged(x):
-    global L_THRESHOLD_LOW
-    L_THRESHOLD_LOW = x
+    global L_THRESHOLD
+    L_THRESHOLD = (x, L_THRESHOLD[1])
     redrawFiles()
 
 def l_threshHighChanged(x):
-    global L_THRESHOLD_HIGH
-    L_THRESHOLD_HIGH = x
+    global L_THRESHOLD
+    L_THRESHOLD = (L_THRESHOLD[0], x)
     redrawFiles()
 
 def b_threshLowChanged(x):
-    global B_THRESHOLD_LOW
-    B_THRESHOLD_LOW = x
+    global B_THRESHOLD
+    B_THRESHOLD = (x, B_THRESHOLD[1])
     redrawFiles()
 
 def b_threshHighChanged(x):
-    global B_THRESHOLD_HIGH
-    B_THRESHOLD_HIGH = x
+    global B_THRESHOLD
+    B_THRESHOLD = (B_THRESHOLD[0], x)
     redrawFiles()
+
+
+def threshold_image(img):
+    splits_y = 9
+    splits_x = 80
+    h, w, c = img.shape
+    out_img = np.zeros(img[:, :, 0].shape)
+
+    blur = cv2.GaussianBlur(img, (7, 7), 0)
+
+    for i in range(splits_y):
+        for j in range(splits_x):
+            partial = blur[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)]
+            gray_partial = cv2.cvtColor(partial, cv2.COLOR_RGB2GRAY)
+            mean = np.mean(gray_partial)
+
+            l_thresh = L_THRESHOLD
+            b_thresh = B_THRESHOLD
+            if (mean < CONTRAST_THRESHOLD):
+                l_thresh = L_THRESHOLD_LC
+                b_thresh = B_THRESHOLD_LC
+
+            #
+            #
+            # convert to LUV color space and threshold the l values.
+            #
+            luv = cv2.cvtColor(partial, cv2.COLOR_RGB2LUV)
+            l = partial[:, :, 0]
+            lbinary = np.zeros_like(l)
+            lbinary[(l >= l_thresh[0]) & (l <= l_thresh[1])] = 1
+
+
+            #
+            # convert to LAB color space and threshold the b values.
+            #
+            lab = cv2.cvtColor(partial, cv2.COLOR_RGB2LAB)
+            b = lab[:, :, 2]
+            bbinary = np.zeros_like(b)
+            bbinary[(b >= b_thresh[0]) & (b <= b_thresh[1])] = 1
+
+            #
+            # Combine the binaries and return
+            #
+            combined = np.zeros_like(b)
+            combined[(bbinary == 1) | (lbinary == 1)] = 1
+
+            out_img[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)] = combined
+
+    return out_img
+
 
 
 def redrawFiles():
     print("--------------------------")
-    print("L_THRESHOLD_LOW  = " + str(L_THRESHOLD_LOW))
-    print("L_THRESHOLD_HIGH = " + str(L_THRESHOLD_HIGH))
-    print("B_THRESHOLD_LOW  = " + str(B_THRESHOLD_LOW))
-    print("B_THRESHOLD_HIGH = " + str(B_THRESHOLD_HIGH))
+    print("CONTRAST_THRESHOLD = " + str(CONTRAST_THRESHOLD))
+    print("L_THRESHOLD_LC  = " + str(L_THRESHOLD_LC))
+    print("L_THRESHOLD  = " + str(L_THRESHOLD))
+    print("B_THRESHOLD_LC  = " + str(B_THRESHOLD_LC))
+    print("B_THRESHOLD  = " + str(B_THRESHOLD))
 
-
-     #
+    #
     # Read in the image file
     #
     img = mpimg.imread(filename, 1)
-    img = cv2.GaussianBlur(img, (5, 5), 0)
 
-    #
-    #
-    # convert to LUV color space and threshold the l values.
-    #
-    luv = cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
-    l = luv[:, :, 0]
-    sobell = cv2.Sobel(l, cv2.CV_64F, 1, 0)
-    abs_sobell = np.absolute(sobell)
-    scaled_sobell = np.uint8(255 * abs_sobell / np.max(abs_sobell))
-    lbinary = np.zeros_like(scaled_sobell)
-    lbinary[(l >= L_THRESHOLD_LOW) & (l <= L_THRESHOLD_HIGH)] = 1
-
-    #
-    # convert to LAB color space and threshold the b values.
-    #
-    # lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
-    # b = lab[:, :, 2]
-    # bbinary = np.zeros_like(b)
-    # bbinary[(b >= B_THRESHOLD_LOW) & (b <= B_THRESHOLD_HIGH)] = 1
-
-    lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB)
-    b = lab[:, :, 2]
-    sobel_b = cv2.Sobel(b, cv2.CV_64F, 1, 0)
-    abs_sobel_b = np.absolute(sobel_b)
-    scaled_sobel_b = np.uint8(255 * abs_sobel_b / np.max(abs_sobel_b))
-    bbinary = np.zeros_like(scaled_sobel_b)
-    bbinary[(b >= B_THRESHOLD_LOW) & (b <= B_THRESHOLD_HIGH)] = 1
-
-    #
-    # Combine the three and return
-    #
-    combined = np.zeros_like(b)
-    combined[(bbinary == 1) | (lbinary == 1)] = 1
+    out_img = threshold_image(img)
 
 
-    axes[0, 0, ].clear()
-    axes[0, 0].imshow(img, cmap='gray')
-    axes[0, 1, ].clear()
-    axes[0, 1].imshow(lbinary, cmap='gray')
-    axes[1, 0, ].clear()
-    axes[1, 0].imshow(bbinary, cmap='gray')
-    axes[1, 1, ].clear()
-    axes[1, 1].imshow(combined, cmap='gray')
+
+    axes[0].clear()
+    axes[0].imshow(img, cmap='gray')
+    axes[1].clear()
+    axes[1].imshow(out_img, cmap='gray')
 
     plt.draw()
 
@@ -107,44 +159,18 @@ def redrawFiles():
 
 
 #######################################################################################
-L_THRESHOLD_LOW  = 118
-L_THRESHOLD_HIGH = 255
-B_THRESHOLD_LOW  = 159
-B_THRESHOLD_HIGH = 255
-
-L_THRESHOLD_LOW  = 199
-L_THRESHOLD_HIGH = 255
-B_THRESHOLD_LOW  = 159
-B_THRESHOLD_HIGH = 255
-
-# This could work for low contrast with Sobel on l and b 48
-# L_THRESHOLD_LOW  = 235
-# L_THRESHOLD_HIGH = 255
-# B_THRESHOLD_LOW  = 142
-# B_THRESHOLD_HIGH = 146
-
-# HIGH Contrast 147
-# L_THRESHOLD_LOW  = 250
-# L_THRESHOLD_HIGH = 255
-# B_THRESHOLD_LOW  = 139
-# B_THRESHOLD_HIGH = 255
-
-L_THRESHOLD_LOW  = 224
-L_THRESHOLD_HIGH = 255
-B_THRESHOLD_LOW  = 172
-B_THRESHOLD_HIGH = 255
-
-
-#
-# create a single window with all the sliders
-#
 cv2.namedWindow('Trackbars', cv2.WINDOW_NORMAL)
 cv2.resizeWindow('Trackbars', 600, 100)
 
-cv2.createTrackbar("L  Low", 'Trackbars', L_THRESHOLD_LOW, 255, l_threshLowChanged)
-cv2.createTrackbar("L  HI", 'Trackbars', L_THRESHOLD_HIGH, 255, l_threshHighChanged)
-cv2.createTrackbar("B  Low", 'Trackbars', B_THRESHOLD_LOW, 255, b_threshLowChanged)
-cv2.createTrackbar("B  HI", 'Trackbars', B_THRESHOLD_HIGH, 255, b_threshHighChanged)
+cv2.createTrackbar("L_LC  Low", 'Trackbars', L_THRESHOLD_LC[0], 255, l_threshLowLCChanged)
+cv2.createTrackbar("L_LC  HI", 'Trackbars', L_THRESHOLD_LC[1], 255, l_threshHighLCChanged)
+cv2.createTrackbar("B_LC  Low", 'Trackbars', B_THRESHOLD_LC[0], 255, b_threshLowLCChanged)
+cv2.createTrackbar("B_LC  HI", 'Trackbars', B_THRESHOLD_LC[1], 255, b_threshHighLCChanged)
+cv2.createTrackbar("L  Low", 'Trackbars', L_THRESHOLD[0], 255, l_threshLowChanged)
+cv2.createTrackbar("L  HI", 'Trackbars', L_THRESHOLD[1], 255, l_threshHighChanged)
+cv2.createTrackbar("B  Low", 'Trackbars', B_THRESHOLD[0], 255, b_threshLowChanged)
+cv2.createTrackbar("B  HI", 'Trackbars', B_THRESHOLD[1], 255, b_threshHighChanged)
+cv2.createTrackbar("CONTRAST", 'Trackbars', CONTRAST_THRESHOLD, 255, Contrast_Changed)
 
 redrawFiles()
 plt.show()
