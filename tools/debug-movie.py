@@ -220,7 +220,7 @@ def threshold_image(img):
 
             l_thresh = video_data['L_THRESHOLD']
             b_thresh = video_data['B_THRESHOLD']
-            if (mean < video_data['CONTRAST_THRESHOLD']):
+            if (mean < video_data['BRIGHTNESS_THRESHOLD']):
                 l_thresh = video_data['L_THRESHOLD_LC']
                 b_thresh = video_data['B_THRESHOLD_LC']
 

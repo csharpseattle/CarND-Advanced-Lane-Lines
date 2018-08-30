@@ -17,13 +17,13 @@ else:
     filename = sys.argv[1]
 
 
-CONTRAST_THRESHOLD = 73
+BRIGHTNESS_THRESHOLD = 73
 L_THRESHOLD_LC  = (179, 255)
 L_THRESHOLD  = (203, 255)
 B_THRESHOLD_LC  = (139, 255)
 B_THRESHOLD  = (137, 255)
 
-CONTRAST_THRESHOLD = 100
+BRIGHTNESS_THRESHOLD = 100
 L_THRESHOLD_LC = (125, 255)
 B_THRESHOLD_LC = (138, 255)
 L_THRESHOLD    = (224, 255)
@@ -35,8 +35,8 @@ f.tight_layout()
 plt.subplots_adjust(left=0.03, right=.97, top=0.99, bottom=0.)
 
 def Contrast_Changed(x):
-    global CONTRAST_THRESHOLD
-    CONTRAST_THRESHOLD = x
+    global BRIGHTNESS_THRESHOLD
+    BRIGHTNESS_THRESHOLD = x
     redrawFiles()
 
 def l_threshLowLCChanged(x):
@@ -96,7 +96,7 @@ def threshold_image(img):
 
             l_thresh = L_THRESHOLD
             b_thresh = B_THRESHOLD
-            if (mean < CONTRAST_THRESHOLD):
+            if (mean < BRIGHTNESS_THRESHOLD):
                 l_thresh = L_THRESHOLD_LC
                 b_thresh = B_THRESHOLD_LC
 
@@ -132,7 +132,7 @@ def threshold_image(img):
 
 def redrawFiles():
     print("--------------------------")
-    print("CONTRAST_THRESHOLD = " + str(CONTRAST_THRESHOLD))
+    print("BRIGHTNESS_THRESHOLD = " + str(BRIGHTNESS_THRESHOLD))
     print("L_THRESHOLD_LC  = " + str(L_THRESHOLD_LC))
     print("L_THRESHOLD  = " + str(L_THRESHOLD))
     print("B_THRESHOLD_LC  = " + str(B_THRESHOLD_LC))
@@ -170,7 +170,7 @@ cv2.createTrackbar("L  Low", 'Trackbars', L_THRESHOLD[0], 255, l_threshLowChange
 cv2.createTrackbar("L  HI", 'Trackbars', L_THRESHOLD[1], 255, l_threshHighChanged)
 cv2.createTrackbar("B  Low", 'Trackbars', B_THRESHOLD[0], 255, b_threshLowChanged)
 cv2.createTrackbar("B  HI", 'Trackbars', B_THRESHOLD[1], 255, b_threshHighChanged)
-cv2.createTrackbar("CONTRAST", 'Trackbars', CONTRAST_THRESHOLD, 255, Contrast_Changed)
+cv2.createTrackbar("BRIGHTNESS", 'Trackbars', BRIGHTNESS_THRESHOLD, 255, Contrast_Changed)
 
 redrawFiles()
 plt.show()
