@@ -7,6 +7,9 @@ import os
 import math
 import sys
 
+sys.path.append("..")
+import image_utils
+
 #reading in an image
 if len(sys.argv) < 2:
     filename = 'frame1.jpg'
@@ -16,18 +19,11 @@ if len(sys.argv) < 2:
 else:
     filename = sys.argv[1]
 
-
-BRIGHTNESS_THRESHOLD = 73
-L_THRESHOLD_LC  = (179, 255)
-L_THRESHOLD  = (203, 255)
-B_THRESHOLD_LC  = (139, 255)
-B_THRESHOLD  = (137, 255)
-
-BRIGHTNESS_THRESHOLD = 100
-L_THRESHOLD_LC = (125, 255)
-B_THRESHOLD_LC = (138, 255)
-L_THRESHOLD    = (224, 255)
-B_THRESHOLD    = (172, 255)
+BRIGHTNESS_THRESHOLD = 0
+L_THRESHOLD_LC  = (203, 255)
+L_THRESHOLD  = (213, 255)
+B_THRESHOLD_LC  = (196, 255)
+B_THRESHOLD  = (145, 255)
 
 
 f, axes = plt.subplots(1, 2, figsize=(12, 4.5))
@@ -79,57 +75,6 @@ def b_threshHighChanged(x):
     B_THRESHOLD = (B_THRESHOLD[0], x)
     redrawFiles()
 
-
-def threshold_image(img):
-    splits_y = 9
-    splits_x = 80
-    h, w, c = img.shape
-    out_img = np.zeros(img[:, :, 0].shape)
-
-    blur = cv2.GaussianBlur(img, (7, 7), 0)
-
-    for i in range(splits_y):
-        for j in range(splits_x):
-            partial = blur[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)]
-            gray_partial = cv2.cvtColor(partial, cv2.COLOR_RGB2GRAY)
-            mean = np.mean(gray_partial)
-
-            l_thresh = L_THRESHOLD
-            b_thresh = B_THRESHOLD
-            if (mean < BRIGHTNESS_THRESHOLD):
-                l_thresh = L_THRESHOLD_LC
-                b_thresh = B_THRESHOLD_LC
-
-            #
-            #
-            # convert to LUV color space and threshold the l values.
-            #
-            luv = cv2.cvtColor(partial, cv2.COLOR_RGB2LUV)
-            l = partial[:, :, 0]
-            lbinary = np.zeros_like(l)
-            lbinary[(l >= l_thresh[0]) & (l <= l_thresh[1])] = 1
-
-
-            #
-            # convert to LAB color space and threshold the b values.
-            #
-            lab = cv2.cvtColor(partial, cv2.COLOR_RGB2LAB)
-            b = lab[:, :, 2]
-            bbinary = np.zeros_like(b)
-            bbinary[(b >= b_thresh[0]) & (b <= b_thresh[1])] = 1
-
-            #
-            # Combine the binaries and return
-            #
-            combined = np.zeros_like(b)
-            combined[(bbinary == 1) | (lbinary == 1)] = 1
-
-            out_img[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)] = combined
-
-    return out_img
-
-
-
 def redrawFiles():
     print("--------------------------")
     print("BRIGHTNESS_THRESHOLD = " + str(BRIGHTNESS_THRESHOLD))
@@ -143,9 +88,15 @@ def redrawFiles():
     #
     img = mpimg.imread(filename, 1)
 
-    out_img = threshold_image(img)
+    l = np.array([L_THRESHOLD, L_THRESHOLD_LC])
+    b = np.array([B_THRESHOLD, B_THRESHOLD_LC])
+    out_img = image_utils.threshold_image(img, l, b, BRIGHTNESS_THRESHOLD)
 
-
+    #
+    # To output file:
+    #
+    stack = np.dstack((out_img, out_img, out_img)) * 255
+    cv2.imwrite('filename.jpg', stack)
 
     axes[0].clear()
     axes[0].imshow(img, cmap='gray')

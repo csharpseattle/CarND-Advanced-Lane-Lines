@@ -7,19 +7,21 @@ import os
 import sys
 import math
 
-#reading in an image
+sys.path.append("..")
+import camera
+import image_utils
+
+
 if len(sys.argv) < 2:
-    filename = 'frame1.jpg'
-    if not os.path.isfile(filename):
-        print("Please provide an image filename on the command line")
-        sys.exit()
+    print("Please provide an image filename on the command line")
+    sys.exit()
 else:
     filename = sys.argv[1]
 
 img = mpimg.imread(filename, 1)
-h, w, _ = img.shape
+h, w = img.shape[:2]
 
-f, axes = plt.subplots(1, 2, figsize=(24, 9))
+f, axes = plt.subplots(1, 2, figsize=(12, 4.5))
 f.tight_layout()
 plt.subplots_adjust(left=0.03, right=.97, top=0.99, bottom=0.)
 
@@ -80,46 +82,6 @@ def p4yChanged(x):
     redrawFiles()
 
 
-def calibrate_camera():
-    num_x_corners = 9
-    num_y_corners = 6
-
-    obj_points = []
-    img_points = []
-
-    obj_p = np.zeros((num_x_corners * num_y_corners,  3), np.float32)
-    obj_p[:, :2] = np.mgrid[0:num_x_corners, 0:num_y_corners].T.reshape(-1, 2)
-
-
-    images = os.listdir("camera_cal")
-    for imagefile in images:
-        #
-        # Read in the image file and convert to grayscale
-        #
-        img = mpimg.imread('camera_cal/' + imagefile)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        #
-        # use cv2 findChessboardCorners to get list of image corners.
-        # If found, append these corners to the img_points array.
-        # Note that the obj_points are the same for each new imagefile.
-        #
-        ret, corners = cv2.findChessboardCorners(gray, (num_x_corners, num_y_corners), None)
-
-        if (ret == True):
-            img_points.append(corners)
-            obj_points.append(obj_p)
-
-    #
-    # use the img_points to pass to  opencv calibrateCamera()
-    # and get the distortion coefficients and
-    # camera calibration matrix to translate 2D image points.
-    #
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, gray.shape[::-1], None, None)
-
-    return mtx, dist
-
-
 
 def redrawFiles():
     global mtx
@@ -149,7 +111,7 @@ def redrawFiles():
     img = mpimg.imread(filename, 1)
 
     undist = cv2.undistort(img, mtx, dist, None, mtx)
-    height, width, _ = undist.shape
+    height, width = undist.shape[:2]
 
     s1 = (int(p1x * width), int(p1y * height))
     s2 = (int(p2x * width), int(p2y * height))
@@ -186,35 +148,7 @@ def redrawFiles():
 
 #######################################################################################
 
-# p1x = 0.18671875
-# p1y = 0.91667
-# p2x = 0.30703125
-# p2y = 0.7875
-# p3x = 0.771875
-# p3y = 0.7875
-# p4x = 0.94453125
-# p4y = 0.91667
-
-# p1x = 0.18671875
-# p1y = 0.91667
-# p2x = 0.3515625
-# p2y = 0.7361111111111112
-# p3x = 0.70390625
-# p3y = 0.7361111111111112
-# p4x = 0.94453125
-# p4y = 0.91667
-
-# p1x = 0.18671875
-# p1y = 0.91667
-# p2x = 0.38125
-# p2y = 0.7361111111111112
-# p3x = 0.70390625
-# p3y = 0.7361111111111112
-# p4x = 0.94453125
-# p4y = 0.91667
-
-
-TRANSFORM_SRC_POINTS = np.float32([(0.0, 0.91528), (0.21875, 0.73472), (0.78281, 0.73472), (1.0, 0.91528)])
+TRANSFORM_SRC_POINTS = [(0.23828, 0.98611), (0.46563, 0.6375), (0.56406, 0.6375), (0.95312, 0.98611)]
 
 (p1x, p1y), (p2x, p2y), (p3x, p3y), (p4x, p4y) = TRANSFORM_SRC_POINTS
 
@@ -239,7 +173,10 @@ cv2.createTrackbar("p3-y", 'Trackbars', int(p3y * height), maxYTrackbar, p3yChan
 cv2.createTrackbar("p4-x", 'Trackbars', int(p4x * width), maxXTrackbar, p4xChanged)
 cv2.createTrackbar("p4-y", 'Trackbars', int(p4y * height), maxYTrackbar, p4yChanged)
 
-mtx, dist = calibrate_camera()
+print("Calibrating camera....")
+mtx, dist = camera.calibrate()
+print("Done.")
+
 redrawFiles()
 plt.show()
 

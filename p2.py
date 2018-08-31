@@ -7,7 +7,7 @@ from moviepy.editor import VideoFileClip
 from enum import Enum
 import project_data
 import camera
-
+import image_utils
 #
 # The Frames list and a number
 # for keeping a frame count.
@@ -193,105 +193,13 @@ def getLastValidLines(side, count = 1):
 
 
 
-'''
-Returns the perspective Transform and inverse transform used for warping
-images
-'''
-def getPerspectiveTransform(w, h):
-    global M
-    global M_inv
-    global video_data
-
-    if M is None:
-        #
-        # Source and destination points are normalized coordinates.
-        # Translate to screen coordinates using the shape of the image.
-        #
-        src_points = np.float32(video_data['TRANSFORM_SRC_POINTS'])
-        dst_points = np.float32([(src_points[0][0], 1.0), (src_points[0][0], 0.0), (src_points[3][0], 0.0), (src_points[3][0], 1.0)])
-
-        src_points *= (w, h)
-        dst_points *= (w, h)
-
-        M = cv2.getPerspectiveTransform(src_points, dst_points)
-        M_inv = cv2.getPerspectiveTransform(dst_points, src_points)
-
-    return M, M_inv
-
-
-
-def threshold_image(img):
-    splits_y = 9
-    splits_x = 20
-    h, w, c = img.shape
-    out_img = np.zeros(img[:, :, 0].shape)
-
-    blur = cv2.GaussianBlur(img, (7, 7), 0)
-
-    for i in range(splits_y):
-        for j in range(splits_x):
-            partial = blur[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)]
-            gray_partial = cv2.cvtColor(partial, cv2.COLOR_RGB2GRAY)
-            mean = np.mean(gray_partial)
-
-            l_thresh = video_data['L_THRESHOLD']
-            b_thresh = video_data['B_THRESHOLD']
-            if (mean < video_data['BRIGHTNESS_THRESHOLD']):
-                l_thresh = video_data['L_THRESHOLD_LC']
-                b_thresh = video_data['B_THRESHOLD_LC']
-
-            #
-            #
-            # convert to LUV color space and threshold the l values.
-            #
-            luv = cv2.cvtColor(partial, cv2.COLOR_RGB2LUV)
-            l = luv[:, :, 0]
-            lbinary = np.zeros_like(l)
-            lbinary[(l >= l_thresh[0]) & (l <= l_thresh[1])] = 1
-
-            #
-            # convert to LAB color space and threshold the b values.
-            #
-            lab = cv2.cvtColor(partial, cv2.COLOR_RGB2LAB)
-            b = lab[:, :, 2]
-            bbinary = np.zeros_like(b)
-            bbinary[(b >= b_thresh[0]) & (b <= b_thresh[1])] = 1
-
-            #
-            # Combine the binaries and return
-            #
-            combined = np.zeros_like(b)
-            combined[(bbinary == 1) | (lbinary == 1)] = 1
-
-            out_img[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)] = combined
-
-    return out_img
-
-
-def warp_image(img, inverse = False):
-    h, w = img.shape[:2]
-
-    #
-    # get M, the transform matrix
-    #
-    M, M_inv = getPerspectiveTransform(w, h)
-
-    #
-    # use cv2.warpPerspective() to warp your image.
-    # If inverse if false we warp to a bird's eye view
-    # If Inverse is true we warp back to perspective
-    #
-    matrix = (M, M_inv)[inverse == True]
-    warped = cv2.warpPerspective(img, matrix, (w, h), cv2.INTER_LINEAR)
-
-    return warped
 
 
 '''
  Searches a thresholded and warped image for lane lines.
  Returns a left lane line and a right lane line if found.
 '''
-def find_lane_pixels(binary_warped, left_line, right_line):
+def find_lane_lines(binary_warped, left_line, right_line):
     height, width = binary_warped.shape
 
     # Identify the x and y positions of all nonzero pixels in the image
@@ -391,39 +299,14 @@ def find_lane_pixels(binary_warped, left_line, right_line):
     return new_left_line, new_right_line
 
 
-def region_of_interest(img, vertices):
-    """
-    Applies an image mask.
-
-    Only keeps the region of the image defined by the polygon
-    formed from `vertices`. The rest of the image is set to black.
-    `vertices` should be a numpy array of integer points.
-    """
-    #defining a blank mask to start with
-    mask = np.zeros_like(img)
-
-    #defining a 3 channel or 1 channel color to fill the mask with depending on the input image
-    if len(img.shape) > 2:
-        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
-        ignore_mask_color = (255,) * channel_count
-    else:
-        ignore_mask_color = 255
-
-    #filling pixels inside the polygon defined by "vertices" with the fill color
-    verts = np.array([vertices], dtype=np.int32)
-    cv2.fillPoly(mask, verts, ignore_mask_color)
-
-    #returning the image only where mask pixels are nonzero
-    masked_image = cv2.bitwise_and(img, mask)
-    return masked_image
 
 
-def fillLane(avg_left, avg_right, undist, warped):
+def fillLane(avg_left, avg_right, src_points, dst_points,  undist, warped):
 
     #
     # find our pixels to shade
     #
-    width, height, _ = undist.shape
+    height, width = undist.shape[:2]
     fity = np.linspace(0, height-1, height)
     left_fitx = (avg_left[0] * fity ** 2) + (avg_left[1] * fity) + avg_left[2]
     right_fitx = (avg_right[0] * fity ** 2) + (avg_right[1] * fity) + avg_right[2]
@@ -449,7 +332,7 @@ def fillLane(avg_left, avg_right, undist, warped):
     #
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     #
-    newwarp = warp_image(color_warp, True)
+    newwarp = image_utils.warp_image(color_warp, dst_points, src_points)
 
     #
     # Combine the result with the original image
@@ -485,18 +368,29 @@ def process_frame(frame):
     #
     # threshold color values.
     #
-    thresholded = threshold_image(undist)
+    l_threshold = (video_data['L_THRESHOLD'], video_data['L_THRESHOLD_LC'])
+    b_threshold = (video_data['B_THRESHOLD'], video_data['B_THRESHOLD_LC'])
+    brightness_threshold = video_data['BRIGHTNESS_THRESHOLD']
+    thresholded = image_utils.threshold_image(undist, l_threshold, b_threshold, brightness_threshold)
 
     #
     # Mask the region of interest
     #
     points = np.array(video_data['ROI_POINTS']) * (w, h)
-    roi = region_of_interest(thresholded, points)
+    roi = image_utils.region_of_interest(thresholded, points)
 
     #
     # Warp the image to a bird's eye view
     #
-    warped = warp_image(roi)
+    # Source and destination points are normalized coordinates.
+    # Translate to screen coordinates using the shape of the image.
+    #
+    src_points = np.float32(video_data['TRANSFORM_SRC_POINTS'])
+    dst_points = np.float32([(src_points[0][0], 1.0), (src_points[0][0], 0.0), (src_points[3][0], 0.0), (src_points[3][0], 1.0)])
+    src_points *= (w, h)
+    dst_points *= (w, h)
+
+    warped = image_utils.warp_image(roi, src_points, dst_points)
 
     #
     # Create the Frame object to hold the data for the lane lines
@@ -509,7 +403,7 @@ def process_frame(frame):
         prev_left_line = FRAMES[frame_number-1].left_line
         prev_right_line = FRAMES[frame_number-1].right_line
 
-    frame.left_line, frame.right_line = find_lane_pixels(warped, prev_left_line, prev_right_line)
+    frame.left_line, frame.right_line = find_lane_lines(warped, prev_left_line, prev_right_line)
     FRAMES.append(frame)
 
     #
@@ -542,7 +436,7 @@ def process_frame(frame):
     # Use the average of the lines to fill the lane with
     # a translucent green.
     #
-    out_img = fillLane(avg_left, avg_right, undist, warped)
+    out_img = fillLane(avg_left, avg_right, src_points, dst_points,  undist, warped)
 
     #
     # Measure Curvature.  Take the average of the left and right lines
@@ -570,8 +464,8 @@ print("Calibrating Camera....")
 mtx, dist = camera.calibrate()
 print("Done.")
 
-#video_input  = 'project_video.mp4'
-video_input  = 'challenge_video.mp4'
+video_input  = 'project_video.mp4'
+#video_input  = 'challenge_video.mp4'
 #video_input  = 'harder_challenge_video.mp4'
 video_output = 'myvideo.mp4'
 video_data = project_data.getVideoData(video_input)
