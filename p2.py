@@ -134,6 +134,7 @@ class Line:
         return (self.detected == True and
                 (len(self.line_coefficients) == 3) and
                 (len(self.lane_pixels_x) > MIN_PIXELS_FOR_VALID_LINE) and
+                (abs(self.curvature > 200)) and
                 (abs(self.upper_slope - self.lower_slope) < 1.2) and
                 (abs(self.upper_slope < SLOPE_TOLERANCE)) and
                 (abs(self.mid_slope < SLOPE_TOLERANCE)) and
@@ -217,15 +218,44 @@ def find_lane_lines(binary_warped, left_line, right_line):
     nonzeroy = np.array(nonzero[0])
     nonzerox = np.array(nonzero[1])
 
-    left_lane_inds  = []
-    right_lane_inds = []
-
     nwindows      = 9   # Choose the number of sliding windows
-    window_margin = 75  # the width of the windows +/- margin
+    window_margin = 50  # the width of the windows +/- margin
     poly_margin   = 50  # the margin when searching around poly
-    minpix        = 75  # minimum number of pixels found to recenter window
+    minpix        = 200  # minimum number of pixels found to recenter window
 
-    if (left_line is None or not left_line.isValid()) or (right_line is None or not right_line.isValid()):
+    do_Sliding_Window = True
+    new_left_line = None
+    new_right_line = None
+    if (left_line is not None and left_line.isValid()) and (right_line is not None and right_line.isValid()):
+        #
+        # We have valid lines from a previous frame.  We can search around the
+        # polynomial for line pixels.
+        #
+        left_poly = left_line.line_coefficients
+        right_poly = right_line.line_coefficients
+        left_lane_inds = ((nonzerox > (left_poly[0]*(nonzeroy**2) + left_poly[1]*nonzeroy + left_poly[2] - poly_margin)) &
+                          (nonzerox < (left_poly[0]*(nonzeroy**2) + left_poly[1]*nonzeroy + left_poly[2] + poly_margin)))
+        right_lane_inds = ((nonzerox > (right_poly[0]*(nonzeroy**2) + right_poly[1]*nonzeroy + right_poly[2] - poly_margin)) &
+                           (nonzerox < (right_poly[0]*(nonzeroy**2) + right_poly[1]*nonzeroy + right_poly[2] + poly_margin)))
+
+        # Extract left and right line pixel positions
+        leftx = nonzerox[left_lane_inds]
+        lefty = nonzeroy[left_lane_inds]
+        rightx = nonzerox[right_lane_inds]
+        righty = nonzeroy[right_lane_inds]
+
+        # Our new lines.
+        new_right_line = Line(rightx, righty, height, True)
+        new_left_line = Line(leftx, lefty, height, True)
+
+        if new_right_line.isValid() and new_right_line.isValid():
+            do_Sliding_Window = False
+
+
+    if (do_Sliding_Window):
+        left_lane_inds = []
+        right_lane_inds = []
+
         # Take a histogram of the bottom half of the image
         histogram = np.sum(binary_warped[height//2:,:], axis=0)
 
@@ -271,29 +301,19 @@ def find_lane_lines(binary_warped, left_line, right_line):
         # Concatenate the arrays of indices (previously was a list of lists of pixels)
         left_lane_inds = np.concatenate(left_lane_inds)
         right_lane_inds = np.concatenate(right_lane_inds)
-    else:
+
+        # Extract left and right line pixel positions
+        leftx = nonzerox[left_lane_inds]
+        lefty = nonzeroy[left_lane_inds]
+        rightx = nonzerox[right_lane_inds]
+        righty = nonzeroy[right_lane_inds]
+
+        # Our new lines.
+        new_left_line = Line(leftx, lefty, height, True)
+        new_right_line = Line(rightx, righty, height, True)
         #
-        # We have valid lines from a previous frame.  We can search around the
-        # polynomial for line pixels.
+        # end of Sliding Window
         #
-        left_poly = left_line.line_coefficients
-        right_poly = right_line.line_coefficients
-        left_lane_inds = ((nonzerox > (left_poly[0]*(nonzeroy**2) + left_poly[1]*nonzeroy + left_poly[2] - poly_margin)) &
-                          (nonzerox < (left_poly[0]*(nonzeroy**2) + left_poly[1]*nonzeroy + left_poly[2] + poly_margin)))
-        right_lane_inds = ((nonzerox > (right_poly[0]*(nonzeroy**2) + right_poly[1]*nonzeroy + right_poly[2] - poly_margin)) &
-                           (nonzerox < (right_poly[0]*(nonzeroy**2) + right_poly[1]*nonzeroy + right_poly[2] + poly_margin)))
-
-
-    # Extract left and right line pixel positions
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds]
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds]
-
-
-    # Our new lines.
-    new_left_line = Line(leftx, lefty, height, True)
-    new_right_line = Line(rightx, righty, height, True)
 
     left_fitx = new_left_line.fitx
     right_fitx = new_right_line.fitx

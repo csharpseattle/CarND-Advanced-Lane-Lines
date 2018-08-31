@@ -28,9 +28,7 @@ def getVideoData(video_input):
     VIDEO_DATA['challenge_video.mp4']['B_THRESHOLD']    = (144, 255)
 
     # HARDER_CHALLENGE VIDEO
-    # SAVE - TRANSFORM_SRC_POINTS = [(0.11016, 1.0), (0.34297, 0.79306), (0.80469, 0.79306), (0.96719, 1.0)])
-    #TRANSFORM_SRC_POINTS = [(0.0, 1.0), (0.21875, 0.81111), (0.78125, 0.81111), (1.0, 1.0)])
-    VIDEO_DATA['harder_challenge_video.mp4']['TRANSFORM_SRC_POINTS'] = [(0.0, 0.91528), (0.21875, 0.73472), (0.78281, 0.73472), (1.0, 0.91528)]
+    VIDEO_DATA['harder_challenge_video.mp4']['TRANSFORM_SRC_POINTS'] = [(0.0, 0.91528), (0.27031, 0.73472), (0.73984, 0.73472), (1.0, 0.91528)]
     VIDEO_DATA['harder_challenge_video.mp4']['ROI_POINTS'] = [(0.12656, 0.93333), (0.29453, 0.60278), (1.0, 0.60278), (1.0, 0.93333)]
     VIDEO_DATA['harder_challenge_video.mp4']['BRIGHTNESS_THRESHOLD'] = 100
     VIDEO_DATA['harder_challenge_video.mp4']['L_THRESHOLD_LC'] = (125, 255)
