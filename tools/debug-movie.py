@@ -6,6 +6,19 @@ import matplotlib.image as mpimg
 from moviepy.editor import VideoFileClip
 from enum import Enum
 import project_data
+import sys
+
+sys.path.append("..")
+import camera
+import image_utils
+
+video_input  = 'project_video.mp4'
+if len(sys.argv) > 1:
+    video_input = sys.argv[1]
+    if not os.path.isfile(video_input):
+        print("Could not find file: " + video_input)
+        sys.exit()
+
 
 #
 # The Frames list and a number
@@ -182,160 +195,6 @@ def getLastValidLines(side, count = 1):
 
 
 
-
-def getPerspectiveTransform(w, h):
-    global M
-    global M_inv
-    global video_data
-
-    if M is None:
-        #
-        # Source and destination points are normalized coordinates.
-        # Translate to screen coordinates using the shape of the image.
-        #
-        src_points = np.float32(video_data['TRANSFORM_SRC_POINTS'])
-        dst_points = np.float32([(src_points[0][0], 1.0), (src_points[0][0], 0.0), (src_points[3][0], 0.0), (src_points[3][0], 1.0)])
-
-        src_points *= (w, h)
-        dst_points *= (w, h)
-
-        M = cv2.getPerspectiveTransform(src_points, dst_points)
-        M_inv = cv2.getPerspectiveTransform(dst_points, src_points)
-
-    return M, M_inv
-
-def threshold_image(img):
-    splits_y = 9
-    splits_x = 20
-    h, w, c = img.shape
-    out_img = np.zeros(img[:, :, 0].shape)
-
-    blur = cv2.GaussianBlur(img, (7, 7), 0)
-
-    for i in range(splits_y):
-        for j in range(splits_x):
-            partial = blur[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)]
-            gray_partial = cv2.cvtColor(partial, cv2.COLOR_RGB2GRAY)
-            mean = np.mean(gray_partial)
-
-            l_thresh = video_data['L_THRESHOLD']
-            b_thresh = video_data['B_THRESHOLD']
-            if (mean < video_data['BRIGHTNESS_THRESHOLD']):
-                l_thresh = video_data['L_THRESHOLD_LC']
-                b_thresh = video_data['B_THRESHOLD_LC']
-
-            #
-            #
-            # convert to LUV color space and threshold the l values.
-            #
-            luv = cv2.cvtColor(partial, cv2.COLOR_RGB2LUV)
-            l = luv[:, :, 0]
-            lbinary = np.zeros_like(l)
-            lbinary[(l >= l_thresh[0]) & (l <= l_thresh[1])] = 1
-
-            #
-            # convert to LAB color space and threshold the b values.
-            #
-            lab = cv2.cvtColor(partial, cv2.COLOR_RGB2LAB)
-            b = lab[:, :, 2]
-            bbinary = np.zeros_like(b)
-            bbinary[(b >= b_thresh[0]) & (b <= b_thresh[1])] = 1
-
-            #
-            # Combine the binaries and return
-            #
-            combined = np.zeros_like(b)
-            combined[(bbinary == 1) | (lbinary == 1)] = 1
-
-            out_img[(h//splits_y) * i:(h//splits_y) * (i+1), (w//splits_x) * j: (w//splits_x) * (j+1)] = combined
-
-    return out_img
-
-def f0ooo_threshold_image(img):
-
-    blur = cv2.GaussianBlur(img, (5, 5), 0)
-
-    #
-    #
-    # convert to LUV color space and threshold the l values.
-    #
-    luv = cv2.cvtColor(blur, cv2.COLOR_RGB2LUV)
-    l = luv[:, :, 0]
-    sobell = cv2.Sobel(l, cv2.CV_64F, 1, 0)
-    abs_sobell = np.absolute(sobell)
-    scaled_sobell = np.uint8(255 * abs_sobell / np.max(abs_sobell))
-    lbinary = np.zeros_like(scaled_sobell)
-    lbinary[(l >= l_thresh[0]) & (l <= l_thresh[1])] = 1
-
-    #
-    # convert to LAB color space and threshold the b values.
-    #
-    lab = cv2.cvtColor(blur, cv2.COLOR_RGB2LAB)
-    b = lab[:, :, 2]
-    sobel_b = cv2.Sobel(b, cv2.CV_64F, 1, 0)
-    abs_sobel_b = np.absolute(sobel_b)
-    scaled_sobel_b = np.uint8(255 * abs_sobel_b / np.max(abs_sobel_b))
-    bbinary = np.zeros_like(scaled_sobel_b)
-    bbinary[(b >= b_thresh[0]) & (b <= b_thresh[1])] = 1
-
-    #
-    # Combine the three and return
-    #
-    combined = np.zeros_like(b)
-    combined[(bbinary == 1) | (lbinary == 1)] = 1
-    return combined
-
-
-
-def calibrate_camera():
-    camera_calibration_images_path = "camera_cal/"
-
-    num_x_corners = 9
-    num_y_corners = 6
-
-    obj_points = []
-    img_points = []
-
-    #
-    # Prepare the object points.  These are the same for each calibration image.
-    # the reshaped mgrid will give us an array like:
-    # array([[ 0.,  0.,  0.],
-    #        [ 1.,  0.,  0.],
-    #         ...
-    #        [ num_x_corners-1, num_y_corners-1, 0]])
-    obj_p = np.zeros((num_x_corners * num_y_corners,  3), np.float32)
-    obj_p[:, :2] = np.mgrid[0:num_x_corners, 0:num_y_corners].T.reshape(-1, 2)
-
-
-    images = os.listdir(camera_calibration_images_path)
-    for imagefile in images:
-        #
-        # Read in the image file and convert to grayscale
-        #
-        img = mpimg.imread(camera_calibration_images_path + imagefile)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        #
-        # use cv2 findChessboardCorners to get list of image corners.
-        # If found, append these corners to the img_points array.
-        # Note that the obj_points are the same for each new imagefile.
-        #
-        ret, corners = cv2.findChessboardCorners(gray, (num_x_corners, num_y_corners), None)
-
-        if (ret == True):
-            img_points.append(corners)
-            obj_points.append(obj_p)
-
-    #
-    # use the img_points to pass to  opencv calibrateCamera()
-    # and get the distortion coefficients and
-    # camera calibration matrix to translate 2D image points.
-    #
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(obj_points, img_points, gray.shape[::-1], None, None)
-
-    return mtx, dist
-
-
 def find_lane_pixels(binary_warped, left_line, right_line):
     height, width = binary_warped.shape
 
@@ -507,34 +366,7 @@ def find_lane_pixels(binary_warped, left_line, right_line):
 
 
 
-def region_of_interest(img, vertices):
-    """
-    Applies an image mask.
-
-    Only keeps the region of the image defined by the polygon
-    formed from `vertices`. The rest of the image is set to black.
-    `vertices` should be a numpy array of integer points.
-    """
-    #defining a blank mask to start with
-    mask = np.zeros_like(img)
-
-    #defining a 3 channel or 1 channel color to fill the mask with depending on the input image
-    if len(img.shape) > 2:
-        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
-        ignore_mask_color = (255,) * channel_count
-    else:
-        ignore_mask_color = 255
-
-    #filling pixels inside the polygon defined by "vertices" with the fill color
-    verts = np.array([vertices], dtype=np.int32)
-    cv2.fillPoly(mask, verts, ignore_mask_color)
-
-    #returning the image only where mask pixels are nonzero
-    masked_image = cv2.bitwise_and(img, mask)
-    return masked_image
-
-
-def fillLane(avg_left, avg_right, Minv, undist, warped):
+def fillLane(avg_left, avg_right, src_points, dst_points,  undist, warped):
     #
     # find our pixels to shade
     width, height, _ = undist.shape
@@ -563,7 +395,7 @@ def fillLane(avg_left, avg_right, Minv, undist, warped):
     #
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     #
-    newwarp = cv2.warpPerspective(color_warp, Minv, (undist.shape[1], undist.shape[0]), flags=cv2.INTER_LINEAR)
+    newwarp = image_utils.warp_image(color_warp, dst_points, src_points)
 
     #
     # Combine the result with the original image
@@ -589,34 +421,37 @@ def process_frame(frame):
     # distortion coefficients.
     #
     undist = cv2.undistort(frame, mtx, dist, None, mtx)
-    h, w, _ = undist.shape
+    h, w = undist.shape[:2]
 
     #
     # threshold color values.
     #
-    thresholded = threshold_image(undist)
+    #
+    l_threshold = (video_data['L_THRESHOLD'], video_data['L_THRESHOLD_LC'])
+    b_threshold = (video_data['B_THRESHOLD'], video_data['B_THRESHOLD_LC'])
+    brightness_threshold = video_data['BRIGHTNESS_THRESHOLD']
+    thresholded = image_utils.threshold_image(undist, l_threshold, b_threshold, brightness_threshold)
 
     #
     # Mask the region of interest
     #
     points = np.array(video_data['ROI_POINTS']) * (w, h)
-    roi = region_of_interest(thresholded, points)
-
-    #
-    # use cv2.getPerspectiveTransform() to get M, the transform matrix
-    #
-    M, M_inv = getPerspectiveTransform(w, h)
+    roi = image_utils.region_of_interest(thresholded, points)
 
     #
     # use cv2.warpPerspective() to warp your image to a top-down view
     #
-    warped = cv2.warpPerspective(roi, M, (w, h), cv2.INTER_LINEAR)
+    src_points = np.float32(video_data['TRANSFORM_SRC_POINTS'])
+    dst_points = np.float32([(src_points[0][0], 1.0), (src_points[0][0], 0.0), (src_points[3][0], 0.0), (src_points[3][0], 1.0)])
+    src_points *= (w, h)
+    dst_points *= (w, h)
+    warped = image_utils.warp_image(roi, src_points, dst_points)
 
 
     if frame_number >= 0:
         bgr = cv2.cvtColor(undist, cv2.COLOR_RGB2BGR)
         cv2.imwrite('frame' + str(frame_number) + '.jpg', bgr)
-        warped_out = cv2.warpPerspective(bgr, M, (w, h), cv2.INTER_LINEAR)
+        warped_out = image_utils.warp_image(bgr, src_points, dst_points)
         cv2.imwrite('warped' + str(frame_number) + '.jpg', warped_out)
         #
         # Get an average darkness of the image.  We will use different
@@ -666,7 +501,7 @@ def process_frame(frame):
     # Use the average of the lines to fill the lane with
     # a translucent green.
     #
-    out_img = fillLane(avg_left, avg_right, M_inv, undist, warped)
+    out_img = fillLane(avg_left, avg_right, src_points, dst_points,  undist, warped)
 
     #
     # Measure Curvature.  Take the average of the left and right lines
@@ -708,18 +543,15 @@ def process_frame(frame):
 ################################################################################
 ################################################################################
 print("Calibrating Camera....")
-mtx, dist = calibrate_camera()
+mtx, dist = camera.calibrate()
 print("Done.")
 
 #
 # Setup a list to hold the frame data
 #
-#video_input  = 'project_video.mp4'
-#video_input  = 'challenge_video.mp4'
-video_input  = 'harder_challenge_video.mp4'
 video_output = 'myvideo.mp4'
 video_data = project_data.getVideoData(video_input)
 
-clip2 = VideoFileClip(video_input) #.subclip(0, 1)
+clip2 = VideoFileClip(video_input)
 video_clip = clip2.fl_image(process_frame)
 video_clip.write_videofile(video_output, audio=False)

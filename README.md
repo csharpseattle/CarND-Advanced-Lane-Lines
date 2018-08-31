@@ -20,11 +20,10 @@ The goals / steps of this project are the following:
 [image1]: ./writeup_images/undistorted.png "Undistorted example"
 [image2]: ./writeup_images/thresholded.png "Thresholded example"
 [image3]: ./writeup_images/warped.png "Warped example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
-
+[image4]: ./writeup_images/equation.gif "Equation"
+[image5]: ./writeup_images/visualization.png "Visualization"
+[image6]: ./writeup_images/green_lane.jpg "Output"
+[video1]: ./video_outputs/project_video.mp4 "Project Video"
 
 ---
 ### 1. Camera Calibration
@@ -90,31 +89,48 @@ To facilitate the holding of individual line data and properties I created a Lin
 
 #### Line Validation
 
-Several properties of the line are checked for validation of the line. The `isValid()` function of the `Line` class handles this determination.  Line slopes, coefficients, the number of pixels detected, and curvature factor into validation.
+Several properties of the line are checked for validity. The `isValid()` function of the `Line` class handles this determination.  Line slopes, coefficients, the number of pixels detected, and curvature factor into validation.
 
+A visualization of the process can be seen in the lower right quadrant of this video frame:
 
+![visualization][image5]
+
+---
 ### 5. Measuring curvature and offset.
 
-To measure curvature
+#### Curvature
 
-\frac{n!}{k!(n-k)!}
+To measure curvature I used the following formula
 
+![Equation][image4]
 
+A Pixel space to world space conversion was made using standard lane widths and a polynomial was refit to the new world space values.  The curvature equation was then evaluated at the lowest point of the line(bottom of screen).
 
+#### Offset
 
-#### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
-
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
-
-![alt text][image6]
+Offset was calculated under the assumption that the camera was recording from the center point of the car.  The difference of the center of the image from the center point between the detected lane lines was calculated and converted from pixel space to world space.
 
 ---
 
-### Pipeline (video)
+### 6. Render over image
+The final step is the fill the lane area detected and render it back over the original image.  This is done by the function `fillLane()`( file `p2.py`, lines 304 through 341).
 
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
+OpenCV's `fillpoly()` was used to fill the lane boundaries and `warp_image()` was used in reverse to warp the image back into a first-person perspective.
 
-Here's a [link to my video result](./project_video.mp4)
+![Fill_lane][image6]
+
+---
+
+### Videos
+
+Both the `project_video` and the `challenge_video` went well. The `harder_challenge_video` exposed many weaknesses in my approach.  The many shadows and bright spots on the road confused my algorithm, as did the bright grass off the right shoulder of the road.  Even so, the lane detection does recover up until the last very brightly lit hairpin turn at the end.
+
+Here's a [link to my video result for the project video][video1]
+
+Here's a [link to my video result for the challenge video](./video_outputs/challenge_video.mp4)
+
+Here's a [link to my video result for the fiendishly difficult challenge video](./video_outputs/harder_challenge_video.mp4)
+
 
 ---
 

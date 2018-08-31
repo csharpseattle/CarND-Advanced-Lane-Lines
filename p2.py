@@ -1,4 +1,5 @@
 import os
+import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +9,15 @@ from enum import Enum
 import project_data
 import camera
 import image_utils
+
+video_input  = 'project_video.mp4'
+if len(sys.argv) > 1:
+    video_input = sys.argv[1]
+    if not os.path.isfile(video_input):
+        print("Could not find file: " + video_input)
+        sys.exit()
+
+
 #
 # The Frames list and a number
 # for keeping a frame count.
@@ -464,7 +474,6 @@ print("Calibrating Camera....")
 mtx, dist = camera.calibrate()
 print("Done.")
 
-video_input  = 'project_video.mp4'
 #video_input  = 'challenge_video.mp4'
 #video_input  = 'harder_challenge_video.mp4'
 video_output = 'myvideo.mp4'
